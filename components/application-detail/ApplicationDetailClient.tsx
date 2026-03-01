@@ -1,86 +1,164 @@
 'use client';
 
-import { useState } from 'react';
-import { Application, ApplicationActivity, ActivityType } from '@/lib/schemas';
+import { useState, useEffect, useMemo } from 'react';
+import { Application, ApplicationActivity, ActivityType, APPLICATION_STATUS, ApplicationStatus } from '@/lib/schemas';
 import { HeaderBar } from './HeaderBar';
 import { IntelligenceStrip } from './IntelligenceStrip';
 import { TimelinePanel } from './TimelinePanel';
 import { FollowUpPanel } from './FollowUpPanel';
 import { ContextPanel } from './ContextPanel';
 import { ActivityComposer } from './ActivityComposer';
-import { computeApplicationMetrics } from '@/lib/engine';
-
-// Mock initial activities
-const MOCK_ACTIVITIES: ApplicationActivity[] = [
-  {
-    id: '1',
-    application_id: '1',
-    activity_type: 'APPLIED',
-    activity_at: '2023-10-20T10:00:00Z',
-    actor: 'USER',
-    notes: 'Applied via LinkedIn Easy Apply'
-  },
-  {
-    id: '2',
-    application_id: '1',
-    activity_type: 'NOTE_ADDED',
-    activity_at: '2023-10-22T14:30:00Z',
-    actor: 'USER',
-    notes: 'Researched company values, seems like a good culture fit.'
-  }
-];
+import { 
+  recomputeApplicationSignals, 
+  updateApplicationStatus, 
+  scheduleFollowUp, 
+  rescheduleFollowUp,
+  markFollowUpDone, 
+  logApplicationActivity 
+} from '@/lib/engine';
+import { AnimatePresence } from 'motion/react';
+import { useApplicationStore } from '@/lib/store';
+import { 
+  StatusPillSelector 
+} from './StatusPillSelector';
+import { 
+  ConfirmDeleteDialog 
+} from './ConfirmDeleteDialog';
+import { 
+  FollowUpDatePicker 
+} from './FollowUpDatePicker';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { toast } from 'sonner';
 
 interface ApplicationDetailClientProps {
   initialApplication: Application;
 }
 
 export function ApplicationDetailClient({ initialApplication }: ApplicationDetailClientProps) {
-  // Initialize with engine computation
-  const [application, setApplication] = useState<Application>(() => 
-    computeApplicationMetrics(initialApplication)
-  );
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { 
+    applications, 
+    updateApplication, 
+    addActivity, 
+    activities: allActivities, 
+    addApplication,
+    deleteApplication
+  } = useApplicationStore();
   
-  const [activities, setActivities] = useState<ApplicationActivity[]>(MOCK_ACTIVITIES);
+  // 1. Single Source of Truth from Store
+  const application = useMemo(() => {
+    const found = applications.find(a => a.id === initialApplication.id);
+    return found ? recomputeApplicationSignals(found) : recomputeApplicationSignals(initialApplication);
+  }, [applications, initialApplication]);
 
-  const handleAddActivity = (type: ActivityType, notes: string) => {
-    const newActivity: ApplicationActivity = {
-      id: crypto.randomUUID(),
-      application_id: application.id,
-      activity_type: type,
-      activity_at: new Date().toISOString(),
-      actor: 'USER',
-      notes
-    };
+  const activities = useMemo(() => {
+    return allActivities[application.id] || [];
+  }, [allActivities, application.id]);
 
-    setActivities(prev => [newActivity, ...prev]);
-    
-    // Update application state based on activity
-    const updatedApp = { ...application, last_activity_at: newActivity.activity_at };
-    
-    // Re-run engine
-    setApplication(computeApplicationMetrics(updatedApp));
+  // Handle query params for actions
+  useEffect(() => {
+    const action = searchParams.get('action');
+    if (action === 'log_activity') {
+      // Small delay to ensure render
+      setTimeout(() => {
+        const composer = document.getElementById('activity-composer');
+        composer?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        composer?.querySelector('input')?.focus();
+      }, 500);
+    }
+  }, [searchParams]);
+
+  // Ensure application exists in store (for deep links)
+  useEffect(() => {
+    const exists = applications.find(a => a.id === initialApplication.id);
+    if (!exists) {
+      addApplication(initialApplication);
+    }
+  }, [applications, initialApplication, addApplication]);
+
+  // 2. UI State
+  const [isFollowUpOpen, setIsFollowUpOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // 3. Mutation Layer (Centralized)
+  const applyMutation = (updatedApp: Application, activity?: ApplicationActivity) => {
+    updateApplication(updatedApp);
+    if (activity) {
+      addActivity(activity);
+    }
   };
 
-  const handleUpdateStatus = () => {
-    console.log('Update status clicked');
-    // Implement status update modal
+  const handleUpdateStatus = (newStatus: ApplicationStatus) => {
+    if (newStatus === application.status) return;
+    setIsUpdating(true);
+    
+    // Deterministic Pipeline
+    const { application: updatedApp, activity } = updateApplicationStatus(application, newStatus);
+    applyMutation(updatedApp, activity as ApplicationActivity);
+    
+    setIsUpdating(false);
+    toast.success(`Status updated to ${newStatus}`);
   };
 
-  const handleScheduleFollowUp = () => {
-    console.log('Schedule follow-up clicked');
-    // Implement schedule modal
+  const handleScheduleFollowUp = (date: Date | undefined, reason?: string) => {
+    setIsUpdating(true);
+    
+    if (!date) {
+      // Clear follow-up
+      const updatedApp: Application = {
+        ...application,
+        next_follow_up_at: undefined,
+        follow_up_status: 'NONE',
+        updated_at: new Date().toISOString()
+      };
+      applyMutation(recomputeApplicationSignals(updatedApp));
+      setIsUpdating(false);
+      toast.success('Follow-up cleared');
+      return;
+    }
+
+    if (application.next_follow_up_at) {
+      const { application: updatedApp, activity } = rescheduleFollowUp(application, date.toISOString());
+      applyMutation(updatedApp, activity as ApplicationActivity);
+      setIsUpdating(false);
+      toast.success('Follow-up rescheduled');
+    } else {
+      const { application: updatedApp, activity } = scheduleFollowUp(application, date.toISOString(), reason);
+      applyMutation(updatedApp, activity as ApplicationActivity);
+      setIsUpdating(false);
+      toast.success('Follow-up scheduled');
+    }
   };
 
   const handleMarkFollowUpDone = () => {
-    const updatedApp = { 
-      ...application, 
-      follow_up_status: 'COMPLETED' as const,
-      followup_count: application.followup_count + 1,
-      last_activity_at: new Date().toISOString()
-    };
-    setApplication(computeApplicationMetrics(updatedApp));
+    setIsUpdating(true);
+    const { application: updatedApp, activity } = markFollowUpDone(application);
+    applyMutation(updatedApp, activity as ApplicationActivity);
+    setIsUpdating(false);
+    toast.success('Follow-up completed');
+  };
+
+  const handleAddActivity = (type: ActivityType, notes: string, date?: Date) => {
+    const { application: updatedApp, activity } = logApplicationActivity(
+      application, 
+      type, 
+      notes, 
+      date?.toISOString()
+    );
     
-    handleAddActivity('FOLLOWED_UP', 'Marked follow-up as done');
+    applyMutation(updatedApp, activity as ApplicationActivity);
+    toast.success('Activity logged');
+  };
+
+  const handleDeleteApplication = async () => {
+    setIsDeleting(true);
+    
+    deleteApplication(application.id);
+    toast.success('Application deleted');
+    router.push('/applications');
   };
 
   return (
@@ -88,8 +166,16 @@ export function ApplicationDetailClient({ initialApplication }: ApplicationDetai
       <HeaderBar 
         application={application}
         onUpdateStatus={handleUpdateStatus}
-        onLogActivity={() => {}}
+        onLogActivity={() => {
+          const composer = document.getElementById('activity-composer');
+          composer?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          composer?.querySelector('input')?.focus();
+        }}
         onScheduleFollowUp={handleScheduleFollowUp}
+        onDelete={() => setIsDeleteOpen(true)}
+        isFollowUpOpen={isFollowUpOpen}
+        onFollowUpOpenChange={setIsFollowUpOpen}
+        isUpdating={isUpdating}
       />
       
       <IntelligenceStrip application={application} />
@@ -100,7 +186,9 @@ export function ApplicationDetailClient({ initialApplication }: ApplicationDetai
           {/* Left Column: Timeline (2/3 width) */}
           <div className="lg:col-span-2 space-y-6">
             <TimelinePanel activities={activities} />
-            <ActivityComposer onAddActivity={handleAddActivity} />
+            <div id="activity-composer">
+              <ActivityComposer onAddActivity={handleAddActivity} />
+            </div>
           </div>
 
           {/* Right Column: Actions & Context (1/3 width) */}
@@ -108,13 +196,22 @@ export function ApplicationDetailClient({ initialApplication }: ApplicationDetai
             <FollowUpPanel 
               application={application}
               onMarkDone={handleMarkFollowUpDone}
-              onReschedule={handleScheduleFollowUp}
+              onReschedule={() => setIsFollowUpOpen(true)}
+              isUpdating={isUpdating}
             />
             <ContextPanel application={application} />
           </div>
 
         </div>
       </div>
+
+      <ConfirmDeleteDialog 
+        isOpen={isDeleteOpen}
+        onClose={() => setIsDeleteOpen(false)}
+        onConfirm={handleDeleteApplication}
+        isDeleting={isDeleting}
+        companyName={application.company_name}
+      />
     </div>
   );
 }

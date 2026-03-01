@@ -1,7 +1,59 @@
 @import "tailwindcss";
 
 @layer base {
+  :root {
+    /* Backgrounds */
+    --bg-page: #F5F5F7; /* iOS System Gray 6 / Muted background */
+    --bg-surface: #FFFFFF;
+    --bg-surface-hover: #F9FAFB;
+    --bg-surface-active: #F2F4F7;
+
+    /* Borders */
+    --border-subtle: #E5E7EB;
+    --border-default: #D1D5DB;
+    --border-strong: #9CA3AF;
+
+    /* Text */
+    --text-primary: #111827; /* Gray 900 */
+    --text-secondary: #4B5563; /* Gray 600 */
+    --text-muted: #9CA3AF; /* Gray 400 */
+    --text-on-primary: #FFFFFF;
+
+    /* Primary Brand (Refined Indigo/Blue) */
+    --primary: #4F46E5; /* Indigo 600 */
+    --primary-hover: #4338CA; /* Indigo 700 */
+    --primary-subtle: #EEF2FF; /* Indigo 50 */
+    --primary-border: #C7D2FE; /* Indigo 200 */
+
+    /* Semantic Colors */
+    --success: #10B981; /* Emerald 500 */
+    --success-bg: #ECFDF5; /* Emerald 50 */
+    --success-text: #047857; /* Emerald 700 */
+
+    --warning: #F59E0B; /* Amber 500 */
+    --warning-bg: #FFFBEB; /* Amber 50 */
+    --warning-text: #B45309; /* Amber 700 */
+
+    --danger: #EF4444; /* Red 500 */
+    --danger-bg: #FEF2F2; /* Red 50 */
+    --danger-text: #B91C1C; /* Red 700 */
+
+    --info: #3B82F6; /* Blue 500 */
+    --info-bg: #EFF6FF; /* Blue 50 */
+    --info-text: #1D4ED8; /* Blue 700 */
+  }
+
   body {
-    @apply antialiased text-neutral-900 bg-white;
+    @apply antialiased text-neutral-900 bg-[var(--bg-page)];
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply bg-white/80 backdrop-blur-xl border border-white/20 shadow-sm;
+  }
+  
+  .ios-press {
+    @apply active:scale-[0.98] transition-transform duration-100;
   }
 }

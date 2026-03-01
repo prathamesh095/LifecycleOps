@@ -2,6 +2,8 @@ import { Application } from '@/lib/schemas';
 import { cn } from '@/lib/utils';
 import { differenceInDays, parseISO } from 'date-fns';
 import { Activity, AlertTriangle, Clock, Flame, Shield, Zap } from 'lucide-react';
+import { motion } from 'motion/react';
+import { fadeIn, staggerContainer } from '@/lib/motion/presets';
 
 interface IntelligenceStripProps {
   application: Application;
@@ -57,10 +59,15 @@ export function IntelligenceStrip({ application }: IntelligenceStripProps) {
   }
 
   return (
-    <div className="px-6 py-4 border-b border-neutral-100 bg-neutral-50/50 flex items-center gap-4 overflow-x-auto scrollbar-hide">
+    <motion.div 
+      variants={staggerContainer}
+      initial="initial"
+      animate="animate"
+      className="px-6 py-4 border-b border-neutral-100 bg-neutral-50/50 flex items-center gap-4 overflow-x-auto scrollbar-hide"
+    >
       
       {/* Priority Score */}
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-neutral-200 shadow-sm shrink-0">
+      <motion.div variants={fadeIn} className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-neutral-200 shadow-sm shrink-0">
         <div className="h-5 w-5 rounded-full bg-neutral-100 flex items-center justify-center">
           <Zap className="h-3 w-3 text-amber-500 fill-amber-500" />
         </div>
@@ -68,44 +75,47 @@ export function IntelligenceStrip({ application }: IntelligenceStripProps) {
           <span className="text-[10px] uppercase font-bold text-neutral-500 tracking-wide">Priority</span>
           <span className="text-sm font-bold text-neutral-900">{priority_score}/100</span>
         </div>
-      </div>
+      </motion.div>
 
       {/* Momentum State */}
-      <div className={cn("flex items-center gap-2 px-3 py-1.5 rounded-full border shrink-0", momentumColor)}>
+      <motion.div variants={fadeIn} className={cn("flex items-center gap-2 px-3 py-1.5 rounded-full border shrink-0", momentumColor)}>
         <MomentumIcon className="h-3.5 w-3.5" />
         <span className="text-xs font-semibold">{momentumState}</span>
-      </div>
+      </motion.div>
 
       {/* Risk Level */}
-      <div className={cn("flex items-center gap-2 px-3 py-1.5 rounded-full border shrink-0", riskColor)}>
+      <motion.div variants={fadeIn} className={cn("flex items-center gap-2 px-3 py-1.5 rounded-full border shrink-0", riskColor)}>
         <RiskIcon className="h-3.5 w-3.5" />
         <span className="text-xs font-semibold">{riskLevel}</span>
-      </div>
+      </motion.div>
 
       {/* Days Since Activity */}
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-neutral-200 shadow-sm shrink-0">
+      <motion.div variants={fadeIn} className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-neutral-200 shadow-sm shrink-0">
         <Clock className="h-3.5 w-3.5 text-neutral-400" />
         <span className="text-xs font-medium text-neutral-600">
           Last activity {daysSinceActivity === 0 ? 'today' : `${daysSinceActivity}d ago`}
         </span>
-      </div>
+      </motion.div>
 
       {/* Next Follow-Up */}
       {daysUntilFollowUp !== null && (
-        <div className={cn(
-          "flex items-center gap-2 px-3 py-1.5 rounded-full border shrink-0",
-          daysUntilFollowUp < 0 ? "bg-rose-50 text-rose-700 border-rose-200" :
-          daysUntilFollowUp <= 2 ? "bg-amber-50 text-amber-700 border-amber-200" :
-          "bg-white text-neutral-600 border-neutral-200"
-        )}>
+        <motion.div 
+          variants={fadeIn}
+          className={cn(
+            "flex items-center gap-2 px-3 py-1.5 rounded-full border shrink-0",
+            daysUntilFollowUp < 0 ? "bg-rose-50 text-rose-700 border-rose-200" :
+            daysUntilFollowUp <= 2 ? "bg-amber-50 text-amber-700 border-amber-200" :
+            "bg-white text-neutral-600 border-neutral-200"
+          )}
+        >
           <Clock className="h-3.5 w-3.5" />
           <span className="text-xs font-semibold">
             {daysUntilFollowUp < 0 ? `Overdue by ${Math.abs(daysUntilFollowUp)}d` :
              daysUntilFollowUp === 0 ? 'Due today' :
              `Follow-up in ${daysUntilFollowUp}d`}
           </span>
-        </div>
+        </motion.div>
       )}
-    </div>
+    </motion.div>
   );
 }

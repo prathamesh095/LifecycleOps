@@ -13,10 +13,15 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { contactSchema, ContactFormData } from '@/lib/schemas';
 import { Input } from '@/components/ui/Form';
+import { useApplicationStore } from '@/lib/store';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 
 export function ContactsClient() {
   const [isOpen, setIsOpen] = useState(false);
-  const [contacts, setContacts] = useState<any[]>([]);
+  const contacts = useApplicationStore(state => state.contacts);
+  const addContact = useApplicationStore(state => state.addContact);
+  const router = useRouter();
 
   const {
     register,
@@ -33,18 +38,19 @@ export function ContactsClient() {
 
   const onSubmit = async (data: ContactFormData) => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
       const newContact = {
         id: crypto.randomUUID(),
-        ...data
+        ...data,
+        created_at: new Date().toISOString()
       };
       
-      setContacts(prev => [newContact, ...prev]);
+      addContact(newContact);
       setIsOpen(false);
       reset();
+      toast.success('Contact added');
     } catch (error) {
       console.error('Failed to create contact:', error);
+      toast.error('Failed to create contact');
     }
   };
 
@@ -72,9 +78,13 @@ export function ContactsClient() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {contacts.map((contact) => (
-            <Card key={contact.id} className="p-5">
+            <Card 
+              key={contact.id} 
+              className="p-5 cursor-pointer hover:shadow-md transition-shadow active:scale-[0.99] duration-200"
+              onClick={() => router.push(`/contacts/${contact.id}`)}
+            >
               <div className="flex items-center gap-4 mb-3">
-                <div className="h-12 w-12 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500 font-semibold text-lg">
+                <div className="h-12 w-12 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500 font-semibold text-lg border border-neutral-200">
                   {contact.name.charAt(0)}
                 </div>
                 <div>
@@ -94,10 +104,15 @@ export function ContactsClient() {
       {/* Modal */}
       <AnimatePresence>
         {isOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm" onClick={() => setIsOpen(false)}>
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm" 
+            onClick={() => setIsOpen(false)}
+            role="dialog"
+            aria-modal="true"
+          >
             <motion.div 
               {...modal}
-              className="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full m-4" 
+              className="bg-white p-8 rounded-2xl shadow-2xl max-w-md w-full m-4 border border-neutral-100" 
               onClick={e => e.stopPropagation()}
             >
               <h2 className="text-xl font-semibold mb-6 text-neutral-900">Add Contact</h2>
@@ -108,6 +123,7 @@ export function ContactsClient() {
                   placeholder="e.g. Jane Doe"
                   {...register('name')}
                   error={errors.name?.message}
+                  autoFocus
                 />
                 
                 <Input

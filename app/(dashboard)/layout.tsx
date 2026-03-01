@@ -1,7 +1,27 @@
+'use client';
+
 import React from 'react';
-import { Sidebar } from '@/components/sidebar/Sidebar';
+import { UnifiedNavigation } from '@/components/navigation/UnifiedNavigation';
 import { Topbar } from '@/components/dashboard/Topbar';
-import { SidebarProvider } from '@/components/sidebar/SidebarContext';
+import { cn } from '@/lib/utils';
+
+function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-white">
+      <UnifiedNavigation />
+      
+      <div className={cn(
+        "transition-all duration-300 ease-in-out",
+        "pb-24 md:pb-28 lg:pb-32" // Space for bottom nav
+      )}>
+        <Topbar />
+        <main>
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
 
 export default function DashboardLayout({
   children,
@@ -9,17 +29,8 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <SidebarProvider>
-      <div className="min-h-screen bg-white">
-        <Sidebar />
-        
-        <div className="lg:pl-64">
-          <Topbar />
-          <main>
-            {children}
-          </main>
-        </div>
-      </div>
-    </SidebarProvider>
+    <DashboardLayoutContent>
+      {children}
+    </DashboardLayoutContent>
   );
 }

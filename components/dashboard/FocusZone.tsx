@@ -56,52 +56,72 @@ export function FocusZone({ applications, onItemClick }: FocusZoneProps) {
   }, [applications]);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-5 mb-8">
-      
-      {/* 🔴 Panel 1 — Needs Attention */}
-      <FocusPanel
-        title="Needs Attention"
-        subtitle="Items requiring action"
-        icon={AlertCircle}
-        accentColor="red"
-        items={panels.needsAttention}
-        emptyMessage="You're on top of things."
-        onItemClick={onItemClick}
-      />
+    <div className="flex flex-col gap-4 md:gap-5 mb-8">
+      {/* Tier 1: Primary Panels */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-5">
+        {/* 🔴 Panel 1 — Needs Attention */}
+        <FocusPanel
+          title="Needs Attention"
+          subtitle="Items requiring action"
+          icon={AlertCircle}
+          accentColor="red"
+          items={panels.needsAttention}
+          emptyMessage="You're fully caught up."
+          onItemClick={onItemClick}
+          tier={1}
+        />
 
-      {/* 🟡 Panel 2 — Follow-Up Due Soon */}
-      <FocusPanel
-        title="Follow-Up Due Soon"
-        subtitle="Upcoming touchpoints"
-        icon={Clock}
-        accentColor="amber"
-        items={panels.dueSoon}
-        emptyMessage="No follow-ups due soon."
-        onItemClick={onItemClick}
-      />
+        {/* 🟢 Panel 2 — High Value Opportunities */}
+        <FocusPanel
+          title="High Value"
+          subtitle="Opportunities to prioritize"
+          icon={Zap}
+          accentColor="green"
+          items={panels.highValue}
+          emptyMessage="No high value items yet."
+          onItemClick={onItemClick}
+          tier={1}
+        />
+      </div>
 
-      {/* 🔵 Panel 3 — Interview in Progress */}
-      <FocusPanel
-        title="Interview in Progress"
-        subtitle="Active pipelines"
-        icon={Briefcase}
-        accentColor="blue"
-        items={panels.inProgress}
-        emptyMessage="No active interviews."
-        onItemClick={onItemClick}
-      />
+      {/* Tier 2 & 3: Secondary Panels */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-5">
+        {/* 🟡 Panel 3 — Follow-Up Due Soon */}
+        <FocusPanel
+          title="Follow-Up Due Soon"
+          subtitle="Upcoming touchpoints"
+          icon={Clock}
+          accentColor="amber"
+          items={panels.dueSoon}
+          emptyMessage="No upcoming follow-ups."
+          onItemClick={onItemClick}
+          tier={2}
+        />
 
-      {/* 🟢 Panel 4 — High Value Opportunities */}
-      <FocusPanel
-        title="High Value"
-        subtitle="Opportunities to prioritize"
-        icon={Zap}
-        accentColor="green"
-        items={panels.highValue}
-        emptyMessage="No high value items yet."
-        onItemClick={onItemClick}
-      />
+        {/* 🔵 Panel 4 — Interview in Progress */}
+        <FocusPanel
+          title="Interview in Progress"
+          subtitle="Active pipelines"
+          icon={Briefcase}
+          accentColor="blue"
+          items={panels.inProgress}
+          emptyMessage="No active interviews."
+          onItemClick={onItemClick}
+          tier={2}
+        />
 
+        {/* ⚪ Panel 5 — Recently Active */}
+        <FocusPanel
+          title="Recently Active"
+          subtitle="Latest momentum"
+          icon={Activity}
+          accentColor="neutral"
+          items={panels.recentlyActive}
+          emptyMessage="No recent activity."
+          onItemClick={onItemClick}
+          tier={3}
+        />
+      </div>
     </div>
   );
 }

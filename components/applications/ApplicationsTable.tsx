@@ -44,9 +44,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover
 import { Calendar } from '@/components/ui/Calendar';
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { toast } from 'sonner';
 
@@ -117,7 +118,7 @@ export function ApplicationsTable({
   );
 }
 
-function ApplicationRow({ 
+const ApplicationRow = memo(function ApplicationRow({ 
   app, 
   onStatusChange,
   onScheduleFollowUp,
@@ -130,8 +131,6 @@ function ApplicationRow({
   onLogActivity: (id: string, type: ActivityType, notes?: string) => void;
   onDelete: (id: string) => void;
 }) {
-  const [isHovered, setIsHovered] = useState(false);
-
   return (
     <motion.tr
       layout
@@ -140,12 +139,7 @@ function ApplicationRow({
       exit={{ opacity: 0, scale: 0.98 }}
       whileTap={{ scale: 0.995 }}
       transition={{ duration: 0.16, ease: [0.23, 1, 0.32, 1] }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      className={cn(
-        "group relative border-b border-neutral-50 transition-colors duration-150 cursor-default",
-        isHovered ? "bg-neutral-50/50" : "bg-white"
-      )}
+      className="group relative border-b border-neutral-50 transition-colors duration-150 cursor-default hover:bg-neutral-50/50 bg-white"
     >
       <TableCell className="py-3.5">
         <Link 
@@ -196,7 +190,7 @@ function ApplicationRow({
       </TableCell>
     </motion.tr>
   );
-}
+});
 
 function StatusBadge({ 
   status, 
@@ -207,11 +201,12 @@ function StatusBadge({
 }) {
   const getStatusStyles = (s: ApplicationStatus) => {
     switch (s) {
-      case 'OFFER': return 'bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100';
-      case 'INTERVIEWING': return 'bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-100';
-      case 'APPLIED': return 'bg-neutral-50 text-neutral-700 border-neutral-200 hover:bg-neutral-100';
-      case 'REJECTED': return 'bg-rose-50 text-rose-700 border-rose-100 hover:bg-rose-100';
+      case 'OFFER': return 'bg-[var(--success-bg)] text-[var(--success-text)] border-[var(--success-bg)] hover:bg-[var(--success-bg)]/80';
+      case 'INTERVIEWING': return 'bg-[var(--warning-bg)] text-[var(--warning-text)] border-[var(--warning-bg)] hover:bg-[var(--warning-bg)]/80';
+      case 'APPLIED': return 'bg-[var(--primary-subtle)] text-[var(--primary)] border-[var(--primary-subtle)] hover:bg-[var(--primary-subtle)]/80';
+      case 'REJECTED': return 'bg-[var(--danger-bg)] text-[var(--danger-text)] border-[var(--danger-bg)] hover:bg-[var(--danger-bg)]/80';
       case 'GHOSTED': return 'bg-neutral-100 text-neutral-500 border-neutral-200 hover:bg-neutral-200';
+      case 'WITHDRAWN': return 'bg-neutral-100 text-neutral-500 border-neutral-200 hover:bg-neutral-200';
       default: return 'bg-neutral-50 text-neutral-600 border-neutral-100 hover:bg-neutral-100';
     }
   };
@@ -285,30 +280,33 @@ function FollowUpCell({
       <PopoverTrigger asChild>
         <button className={cn(
           "text-xs font-medium transition-colors hover:text-blue-600 active:scale-95 text-left",
-          app.is_overdue ? "text-rose-600" : app.next_follow_up_at ? "text-neutral-700" : "text-neutral-400"
+          app.is_overdue ? "text-rose-600" : app.next_follow_up_at ? "text-neutral-700" : "text-neutral-400",
+          "data-[state=open]:text-blue-600"
         )}>
           {app.next_follow_up_at ? format(parseISO(app.next_follow_up_at), 'MMM d, yyyy') : 'Not scheduled'}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0 rounded-2xl shadow-xl border-neutral-100" align="start">
-        <div className="p-3 border-b border-neutral-50 flex items-center justify-between">
-          <span className="text-xs font-semibold text-neutral-900">Schedule Follow-up</span>
+      <PopoverContent className="w-auto p-0 rounded-3xl border border-neutral-200 shadow-2xl overflow-hidden bg-white/90 backdrop-blur-xl" align="start" sideOffset={8}>
+        <div className="p-3 border-b border-neutral-100 flex items-center justify-between bg-neutral-50/50">
+          <span className="text-xs font-bold text-neutral-500 uppercase tracking-widest px-1">Schedule Follow-up</span>
           <Button 
             variant="ghost" 
             size="sm" 
-            className="h-7 text-[10px] text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+            className="h-7 text-[10px] font-bold uppercase tracking-wider text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
             onClick={() => handleSelect(undefined)}
           >
             Clear
           </Button>
         </div>
-        <Calendar
-          mode="single"
-          selected={date}
-          onSelect={handleSelect}
-          initialFocus
-          className="rounded-b-2xl"
-        />
+        <div className="p-3">
+          <Calendar
+            mode="single"
+            selected={date}
+            onSelect={handleSelect}
+            initialFocus
+            className="p-0"
+          />
+        </div>
       </PopoverContent>
     </Popover>
   );
@@ -338,6 +336,8 @@ function RowActions({
   onScheduleFollowUp: () => void;
   onDelete: () => void;
 }) {
+  const router = useRouter();
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -358,18 +358,12 @@ function RowActions({
         
         <DropdownMenuItem 
           className="flex items-center px-2 py-2 cursor-pointer rounded-lg hover:bg-neutral-50 transition-colors"
-          onClick={() => onLogActivity('NOTE_ADDED')}
+          onClick={() => {
+            router.push(`/applications/${app.id}?action=log_activity`);
+          }}
         >
           <History className="mr-2.5 h-4 w-4 text-neutral-400" />
           <span className="text-sm font-medium">Log Activity</span>
-        </DropdownMenuItem>
-        
-        <DropdownMenuItem 
-          className="flex items-center px-2 py-2 cursor-pointer rounded-lg hover:bg-neutral-50 transition-colors"
-          onClick={() => {/* Handled by FollowUpCell but can trigger modal here */}}
-        >
-          <CalendarIcon className="mr-2.5 h-4 w-4 text-neutral-400" />
-          <span className="text-sm font-medium">Schedule Follow-up</span>
         </DropdownMenuItem>
         
         <DropdownMenuItem className="flex items-center px-2 py-2 cursor-pointer rounded-lg hover:bg-neutral-50 transition-colors">

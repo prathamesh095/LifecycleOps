@@ -8,9 +8,10 @@ interface FollowUpPanelProps {
   application: Application;
   onMarkDone: () => void;
   onReschedule: () => void;
+  isUpdating?: boolean;
 }
 
-export function FollowUpPanel({ application, onMarkDone, onReschedule }: FollowUpPanelProps) {
+export function FollowUpPanel({ application, onMarkDone, onReschedule, isUpdating = false }: FollowUpPanelProps) {
   const {
     next_follow_up_at,
     follow_up_status,
@@ -83,13 +84,13 @@ export function FollowUpPanel({ application, onMarkDone, onReschedule }: FollowU
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Button variant="outline" onClick={onReschedule} className="w-full">
+            <Button variant="outline" onClick={onReschedule} className="w-full" disabled={isUpdating}>
               <RotateCw className="h-4 w-4 mr-2" />
               Reschedule
             </Button>
-            <Button variant="primary" onClick={onMarkDone} className="w-full">
+            <Button variant="primary" onClick={onMarkDone} className="w-full" disabled={isUpdating}>
               <CheckCircle2 className="h-4 w-4 mr-2" />
-              Mark Done
+              {isUpdating ? 'Updating...' : 'Mark Done'}
             </Button>
           </div>
         </div>

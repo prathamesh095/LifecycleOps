@@ -21,7 +21,7 @@ export function DatePicker({ date, setDate, label, error }: DatePickerProps) {
   return (
     <div className="space-y-1.5">
       {label && (
-        <label className="text-sm font-medium text-neutral-700">
+        <label className="text-xs font-bold text-neutral-500 uppercase tracking-widest">
           {label}
         </label>
       )}
@@ -30,22 +30,30 @@ export function DatePicker({ date, setDate, label, error }: DatePickerProps) {
           <Button
             variant="outline"
             className={cn(
-              "w-full justify-start text-left font-normal h-10 rounded-xl border-neutral-200",
-              !date && "text-neutral-500",
-              error && "border-rose-500 focus-visible:ring-rose-500/20 focus-visible:border-rose-500"
+              "w-full justify-start text-left font-medium h-11 rounded-2xl border-neutral-200 bg-neutral-50/50 hover:bg-white transition-all",
+              !date && "text-neutral-400",
+              error && "border-rose-500 focus-visible:ring-rose-500/20 focus-visible:border-rose-500",
+              "data-[state=open]:ring-2 data-[state=open]:ring-neutral-900/5 data-[state=open]:border-neutral-300 data-[state=open]:bg-white"
             )}
           >
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {date ? format(date, "PPP") : <span>Pick a date</span>}
+            <CalendarIcon className={cn("mr-2 h-4 w-4", date ? "text-blue-500" : "text-neutral-400")} />
+            {date ? format(date, "MMM d, yyyy") : <span>Pick a date</span>}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <Calendar
-            mode="single"
-            selected={date}
-            onSelect={setDate}
-            initialFocus
-          />
+        <PopoverContent 
+          className="w-auto p-0 rounded-3xl border border-neutral-200 shadow-2xl overflow-hidden bg-white/90 backdrop-blur-xl" 
+          align="start"
+          sideOffset={8}
+        >
+          <div className="p-3">
+            <Calendar
+              mode="single"
+              selected={date}
+              onSelect={setDate}
+              initialFocus
+              className="p-0"
+            />
+          </div>
         </PopoverContent>
       </Popover>
       {error && (
@@ -56,3 +64,4 @@ export function DatePicker({ date, setDate, label, error }: DatePickerProps) {
     </div>
   )
 }
+

@@ -6,15 +6,15 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Briefcase, Search, Filter } from 'lucide-react';
-import { useState, useMemo } from 'react';
-import { Application, ApplicationFormData, APPLICATION_STATUS, ApplicationActivity, ActivityType } from '@/lib/schemas';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { Application, ApplicationFormData, APPLICATION_STATUS, ApplicationActivity, ActivityType, ApplicationStatus } from '@/lib/schemas';
 import { AddApplicationModal } from './AddApplicationModal';
 import { ApplicationsTable } from './ApplicationsTable';
-import { recomputeApplicationSignals } from '@/lib/engine';
+import { recomputeApplicationSignals, logApplicationActivity, updateApplicationStatus, scheduleFollowUp } from '@/lib/engine';
 import { FocusZone } from '@/components/dashboard/FocusZone';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
 import { toast } from 'sonner';
+import { useApplicationStore } from '@/lib/store';
 
 // Mock initial data with rich engine fields
 const INITIAL_APPLICATIONS_RAW: any[] = [
@@ -137,77 +137,66 @@ const INITIAL_APPLICATIONS = INITIAL_APPLICATIONS_RAW.map(app => recomputeApplic
 
 export function ApplicationsClient() {
   const router = useRouter();
+  const { 
+    applications, 
+    setApplications, 
+    updateApplication, 
+    deleteApplication: storeDeleteApplication, 
+    addActivity,
+    addApplication
+  } = useApplicationStore();
   const [isOpen, setIsOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [applications, setApplications] = useState<Application[]>(INITIAL_APPLICATIONS);
+  const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
 
-  // Simulate initial load
+  // Initialize store with mock data if empty
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 800);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Mutation Handlers
-  const logActivity = (applicationId: string, type: ActivityType, notes?: string) => {
-    setApplications(prev => prev.map(app => {
-      if (app.id !== applicationId) return app;
-      
-      const now = new Date().toISOString();
-      const updatedApp: Application = {
-        ...app,
-        last_activity_at: now,
-        interaction_count: app.interaction_count + 1,
-        updated_at: now,
-      };
-
-      return recomputeApplicationSignals(updatedApp);
-    }));
-  };
-
-  const updateApplicationStatus = (applicationId: string, newStatus: any) => {
-    setApplications(prev => prev.map(app => {
-      if (app.id !== applicationId) return app;
-      
-      const now = new Date().toISOString();
-      const updatedApp: Application = {
-        ...app,
-        status: newStatus,
-        status_updated_at: now,
-        last_activity_at: now,
-        updated_at: now,
-      };
-
-      return recomputeApplicationSignals(updatedApp);
-    }));
-    logActivity(applicationId, 'STATUS_CHANGED', `Status changed to ${newStatus}`);
-    toast.success(`Status updated to ${newStatus}`);
-  };
-
-  const scheduleFollowUp = (applicationId: string, date: string | undefined) => {
-    setApplications(prev => prev.map(app => {
-      if (app.id !== applicationId) return app;
-      
-      const now = new Date().toISOString();
-      const updatedApp: Application = {
-        ...app,
-        next_follow_up_at: date,
-        follow_up_status: date ? 'SCHEDULED' : 'NONE',
-        last_activity_at: now,
-        updated_at: now,
-      };
-
-      return recomputeApplicationSignals(updatedApp);
-    }));
-    if (date) {
-      logActivity(applicationId, 'NOTE_ADDED', `Follow-up scheduled for ${new Date(date).toLocaleDateString()}`);
+    if (applications.length === 0) {
+      setApplications(INITIAL_APPLICATIONS);
     }
-  };
+  }, [applications.length, setApplications]);
 
-  const deleteApplication = (id: string) => {
-    setApplications(prev => prev.filter(app => app.id !== id));
-  };
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, statusFilter]);
+
+  // Mutation Handlers using centralized engine logic
+  const handleLogActivity = useCallback((applicationId: string, type: ActivityType, notes?: string) => {
+    const app = applications.find(a => a.id === applicationId);
+    if (!app) return;
+
+    const { application: updatedApp, activity } = logApplicationActivity(app, type, notes || '');
+    updateApplication(updatedApp);
+    addActivity(activity as ApplicationActivity);
+  }, [applications, updateApplication, addActivity]);
+
+  const handleUpdateStatus = useCallback((applicationId: string, newStatus: ApplicationStatus) => {
+    const app = applications.find(a => a.id === applicationId);
+    if (!app) return;
+
+    const { application: updatedApp, activity } = updateApplicationStatus(app, newStatus);
+    updateApplication(updatedApp);
+    addActivity(activity as ApplicationActivity);
+    toast.success(`Status updated to ${newStatus}`);
+  }, [applications, updateApplication, addActivity]);
+
+  const handleScheduleFollowUp = useCallback((applicationId: string, date: string | undefined) => {
+    const app = applications.find(a => a.id === applicationId);
+    if (!app || !date) return;
+
+    const { application: updatedApp, activity } = scheduleFollowUp(app, date);
+    updateApplication(updatedApp);
+    addActivity(activity as ApplicationActivity);
+    toast.success('Follow-up scheduled');
+  }, [applications, updateApplication, addActivity]);
+
+  const handleDeleteApplication = useCallback((id: string) => {
+    storeDeleteApplication(id);
+  }, [storeDeleteApplication]);
 
   // Re-run engine when applications change
   const processedApplications = useMemo(() => {
@@ -240,17 +229,23 @@ export function ApplicationsClient() {
     });
   }, [processedApplications, searchQuery, statusFilter]);
 
+  const paginatedApplications = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredApplications.slice(start, start + pageSize);
+  }, [filteredApplications, page]);
+
+  const totalPages = Math.ceil(filteredApplications.length / pageSize);
+
   const handleCreateApplication = async (data: ApplicationFormData) => {
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 600));
+      const now = new Date().toISOString();
       
       const newApplication: Application = {
         id: crypto.randomUUID(),
         ...data,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        last_activity_at: new Date().toISOString(),
+        created_at: now,
+        updated_at: now,
+        last_activity_at: now,
         interaction_count: 1,
         followup_count: 0,
         follow_up_status: 'NONE',
@@ -267,13 +262,23 @@ export function ApplicationsClient() {
         user_interest_level: data.user_interest_level || 'MEDIUM',
       };
       
-      // Run engine on new app
-      const computedApp = computeApplicationMetrics(newApplication);
+      addApplication(newApplication);
+      
+      // Log creation activity
+      addActivity({
+        id: crypto.randomUUID(),
+        application_id: newApplication.id,
+        activity_type: 'APPLICATION_CREATED',
+        activity_at: now,
+        actor: 'USER',
+        notes: 'Application created'
+      });
 
-      setApplications(prev => [computedApp, ...prev]);
       setIsOpen(false);
+      toast.success('Application created');
     } catch (error) {
       console.error('Failed to create application:', error);
+      toast.error('Failed to create application');
     }
   };
 
@@ -352,14 +357,44 @@ export function ApplicationsClient() {
           </Button>
         </div>
       ) : (
-        <ApplicationsTable 
-          applications={filteredApplications} 
-          isLoading={isLoading}
-          onStatusChange={updateApplicationStatus}
-          onScheduleFollowUp={scheduleFollowUp}
-          onLogActivity={logActivity}
-          onDelete={deleteApplication}
-        />
+        <>
+          <ApplicationsTable 
+            applications={paginatedApplications} 
+            isLoading={isLoading}
+            onStatusChange={handleUpdateStatus}
+            onScheduleFollowUp={handleScheduleFollowUp}
+            onLogActivity={handleLogActivity}
+            onDelete={handleDeleteApplication}
+          />
+          
+          {filteredApplications.length > pageSize && (
+            <div className="flex items-center justify-between mt-4 px-2">
+              <div className="text-xs text-neutral-500 font-medium">
+                Showing {Math.min(filteredApplications.length, (page - 1) * pageSize + 1)} to {Math.min(filteredApplications.length, page * pageSize)} of {filteredApplications.length}
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setPage(p => Math.max(1, p - 1))} 
+                  disabled={page === 1}
+                  className="h-8 text-xs"
+                >
+                  Previous
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))} 
+                  disabled={page === totalPages}
+                  className="h-8 text-xs"
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
       
       <AddApplicationModal 

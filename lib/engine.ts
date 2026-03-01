@@ -1,5 +1,12 @@
-import { Application, FollowUpStatus } from './schemas';
+import { Application, FollowUpStatus, ApplicationStatus, ApplicationActivity, ActivityType } from './schemas';
 import { differenceInDays, parseISO, isPast, addDays, isWithinInterval } from 'date-fns';
+
+export function generateId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
 
 /**
  * Pure rule-based intelligence engine for ApexJob.
@@ -22,17 +29,21 @@ export function computeApplicationMetrics(app: Application): Application {
     is_high_priority
   });
 
-  // 3. Determine Follow-Up Status if not explicitly set
+  // 3. Determine Follow-Up Status
   let follow_up_status = app.follow_up_status;
   if (app.next_follow_up_at) {
     const followUpDate = parseISO(app.next_follow_up_at);
-    if (isPast(followUpDate) && follow_up_status !== 'COMPLETED') {
-      follow_up_status = 'OVERDUE';
-    } else if (differenceInDays(followUpDate, now) <= 2 && follow_up_status !== 'COMPLETED') {
-      follow_up_status = 'DUE_SOON';
-    } else if (follow_up_status === 'NONE') {
-      follow_up_status = 'SCHEDULED';
+    if (follow_up_status !== 'COMPLETED') {
+      if (isPast(followUpDate)) {
+        follow_up_status = 'OVERDUE';
+      } else if (differenceInDays(followUpDate, now) <= 2) {
+        follow_up_status = 'DUE_SOON';
+      } else {
+        follow_up_status = 'SCHEDULED';
+      }
     }
+  } else {
+    follow_up_status = 'NONE';
   }
 
   return {
@@ -52,6 +63,174 @@ export function computeApplicationMetrics(app: Application): Application {
  * Alias for computeApplicationMetrics as per architectural requirements.
  */
 export const recomputeApplicationSignals = computeApplicationMetrics;
+
+// --- CENTRAL MUTATION UTILITIES ---
+
+export function updateApplicationStatus(
+  app: Application,
+  newStatus: ApplicationStatus
+): { application: Application; activity: Partial<ApplicationActivity> } {
+  const now = new Date().toISOString();
+  
+  const updatedApp: Application = {
+    ...app,
+    status: newStatus,
+    status_updated_at: now,
+    last_activity_at: now,
+    updated_at: now,
+  };
+
+  const activity: Partial<ApplicationActivity> = {
+    id: generateId(),
+    application_id: app.id,
+    activity_type: 'STATUS_CHANGED',
+    activity_at: now,
+    actor: 'USER',
+    notes: `Status changed to ${newStatus}`,
+  };
+
+  return {
+    application: recomputeApplicationSignals(updatedApp),
+    activity
+  };
+}
+
+export function scheduleFollowUp(
+  app: Application,
+  date: string,
+  reason?: string
+): { application: Application; activity: Partial<ApplicationActivity> } {
+  const now = new Date().toISOString();
+  
+  const updatedApp: Application = {
+    ...app,
+    next_follow_up_at: date,
+    follow_up_status: 'SCHEDULED',
+    follow_up_reason: reason || app.follow_up_reason,
+    followup_count: app.followup_count + 1,
+    last_activity_at: now,
+    updated_at: now,
+  };
+
+  const activity: Partial<ApplicationActivity> = {
+    id: generateId(),
+    application_id: app.id,
+    activity_type: 'FOLLOW_UP_SCHEDULED',
+    activity_at: now,
+    actor: 'USER',
+    notes: `Follow-up scheduled for ${new Date(date).toLocaleDateString()}${reason ? `: ${reason}` : ''}`,
+  };
+
+  return {
+    application: recomputeApplicationSignals(updatedApp),
+    activity
+  };
+}
+
+export function rescheduleFollowUp(
+  app: Application,
+  date: string
+): { application: Application; activity: Partial<ApplicationActivity> } {
+  const now = new Date().toISOString();
+  
+  const updatedApp: Application = {
+    ...app,
+    next_follow_up_at: date,
+    updated_at: now,
+  };
+
+  const activity: Partial<ApplicationActivity> = {
+    id: generateId(),
+    application_id: app.id,
+    activity_type: 'RESCHEDULED',
+    activity_at: now,
+    actor: 'USER',
+    notes: `Follow-up rescheduled to ${new Date(date).toLocaleDateString()}`,
+  };
+
+  return {
+    application: recomputeApplicationSignals(updatedApp),
+    activity
+  };
+}
+
+export function markFollowUpDone(
+  app: Application
+): { application: Application; activity: Partial<ApplicationActivity> } {
+  const now = new Date().toISOString();
+  
+  const updatedApp: Application = {
+    ...app,
+    follow_up_status: 'COMPLETED',
+    last_activity_at: now,
+    updated_at: now,
+  };
+
+  const activity: Partial<ApplicationActivity> = {
+    id: generateId(),
+    application_id: app.id,
+    activity_type: 'FOLLOWED_UP',
+    activity_at: now,
+    actor: 'USER',
+    notes: 'Marked follow-up as completed',
+  };
+
+  return {
+    application: recomputeApplicationSignals(updatedApp),
+    activity
+  };
+}
+
+export function logApplicationActivity(
+  app: Application,
+  type: ActivityType,
+  notes: string,
+  date?: string
+): { application: Application; activity: Partial<ApplicationActivity> } {
+  const now = new Date().toISOString();
+  const activityAt = date || now;
+  
+  let extraData: Partial<Application> = {};
+  
+  // Special activity rules
+  if (type === 'INTERVIEW_SCHEDULED') {
+    extraData = { 
+      interview_scheduled: true,
+      interview_date: activityAt,
+      status: 'INTERVIEWING' // Auto-transition if scheduled
+    };
+  } else if (type === 'OFFER_RECEIVED') {
+    extraData = { 
+      offer_received: true, 
+      offer_received_at: activityAt,
+      status: 'OFFER' 
+    };
+  } else if (type === 'RECRUITER_REPLY') {
+    extraData = { response_received: true };
+  }
+
+  const updatedApp: Application = {
+    ...app,
+    ...extraData,
+    last_activity_at: activityAt,
+    interaction_count: app.interaction_count + 1,
+    updated_at: now,
+  };
+
+  const activity: Partial<ApplicationActivity> = {
+    id: generateId(),
+    application_id: app.id,
+    activity_type: type,
+    activity_at: activityAt,
+    actor: 'USER',
+    notes,
+  };
+
+  return {
+    application: recomputeApplicationSignals(updatedApp),
+    activity
+  };
+}
 
 function computeIsStale(app: Application, now: Date): boolean {
   if (app.status !== 'APPLIED') return false;
