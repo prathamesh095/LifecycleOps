@@ -1,14 +1,18 @@
 /**
  * Authentication middleware for protecting API routes
  * Validates session and ensures user is authenticated
+ * 
+ * NOTE: This is imported in server-side code only (API routes, server components)
+ * NOT in middleware.ts which runs on edge runtime
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { validateSession } from './session';
 
 /**
  * Verify the request has a valid session
  * Returns the authenticated user or null
+ * 
+ * This function should only be called from server-side API routes, not from edge middleware
  */
 export async function getAuthenticatedUser(request: NextRequest) {
   try {
@@ -18,6 +22,9 @@ export async function getAuthenticatedUser(request: NextRequest) {
       return null;
     }
 
+    // Import validateSession only when needed (lazy load to avoid edge runtime issues)
+    const { validateSession } = await import('./session');
+    
     const user = await validateSession(sessionToken);
     return user;
   } catch {

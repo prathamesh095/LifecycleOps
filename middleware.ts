@@ -1,10 +1,13 @@
 /**
  * Next.js middleware for global security and performance enhancements
  * Runs on every request at the edge
+ * 
+ * NOTE: This middleware cannot use Prisma or other database libraries
+ * because Next.js edge runtime doesn't support them. Session validation
+ * is handled server-side in API routes and layout.tsx
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { validateSession } from './lib/auth/session';
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next();
@@ -39,14 +42,9 @@ export async function middleware(request: NextRequest) {
   const protectedRoutes = ['/dashboard', '/applications', '/activities', '/contacts', '/reminders'];
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
 
+  // Simple token presence check (full validation happens server-side in API routes)
   if (isProtectedRoute && !sessionToken) {
-    // Check if session is still valid
-    const user = await validateSession(sessionToken || '');
-    
-    if (!user) {
-      // Redirect to login
-      return NextResponse.redirect(new URL('/login', request.url));
-    }
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
   return response;
@@ -54,7 +52,12 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Apply to all routes except static files and API routes
-    '/((?!api|_next/static|_next/image|favicon.ico|public).*)',
+    // Apply security headers to all routes except:
+    // - API routes (they have their own auth)
+    // - Static assets
+    // - Images and favicons
+    // - Public folder
+    // - _next folder
+    '/((?!api|_next|_next/static|_next/image|favicon.ico|public).*)',
   ],
 };
