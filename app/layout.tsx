@@ -2,6 +2,7 @@ import type {Metadata} from 'next';
 import './globals.css'; // Global styles
 import { Toaster } from 'sonner';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { AuthInitializer } from '@/components/auth/AuthInitializer';
 
 export const metadata: Metadata = {
   title: 'ApexJob',
@@ -12,6 +13,7 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
     <html lang="en">
       <body suppressHydrationWarning>
+        <AuthInitializer />
         <ErrorBoundary>
           {children}
         </ErrorBoundary>
