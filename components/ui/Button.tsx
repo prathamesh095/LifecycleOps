@@ -25,20 +25,20 @@ export const buttonVariants = ({
   className?: string 
 } = {}) => {
   const variants = {
-    primary: 'bg-neutral-900 text-white hover:bg-neutral-800 border border-transparent shadow-sm',
-    secondary: 'bg-neutral-100 text-neutral-900 hover:bg-neutral-200 border border-transparent',
-    outline: 'bg-white text-neutral-900 border border-neutral-200 hover:bg-neutral-50 hover:border-neutral-300',
+    primary: 'bg-indigo-600 text-white hover:bg-indigo-700 border border-transparent shadow-sm shadow-indigo-200',
+    secondary: 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-transparent',
+    outline: 'bg-white/50 backdrop-blur-sm text-neutral-900 border border-neutral-200 hover:bg-white hover:border-neutral-300 shadow-sm',
     ghost: 'bg-transparent text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900',
   };
 
   const sizes = {
-    sm: 'h-8 px-3 text-xs rounded-lg',
-    md: 'h-10 px-4 text-sm rounded-xl',
-    lg: 'h-12 px-6 text-base rounded-xl',
+    sm: 'h-8 px-3 text-xs rounded-xl',
+    md: 'h-11 px-5 text-sm rounded-2xl',
+    lg: 'h-13 px-7 text-base rounded-2xl',
   };
 
   return cn(
-    'inline-flex items-center justify-center font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20 disabled:opacity-50 disabled:pointer-events-none cursor-pointer',
+    'inline-flex items-center justify-center font-semibold tracking-tight transition-all duration-200 focus:outline-none focus-visible:ring-4 focus-visible:ring-indigo-500/10 disabled:opacity-50 disabled:pointer-events-none cursor-pointer',
     variant ? variants[variant] : variants.primary,
     size ? sizes[size] : sizes.md,
     className
