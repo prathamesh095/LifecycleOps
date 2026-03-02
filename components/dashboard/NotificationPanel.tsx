@@ -1,5 +1,3 @@
-'use client';
-
 import { useApplicationStore } from '@/lib/store';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/Popover';
 import { Bell, Check, Clock, AlertCircle, Briefcase, Zap, Star } from 'lucide-react';
@@ -7,29 +5,14 @@ import { motion, AnimatePresence } from 'motion/react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
 
 export function NotificationPanel() {
-  const [mounted, setMounted] = useState(false);
   const notifications = useApplicationStore(state => state.notifications);
   const markNotificationRead = useApplicationStore(state => state.markNotificationRead);
   const markAllNotificationsRead = useApplicationStore(state => state.markAllNotificationsRead);
   const router = useRouter();
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMounted(true);
-  }, []);
-
   const unreadCount = notifications.filter(n => !n.read).length;
-
-  if (!mounted) {
-    return (
-      <button className="relative rounded-full p-2.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-100">
-        <Bell className="h-5 w-5" />
-      </button>
-    );
-  }
 
   const getIcon = (type: string) => {
     switch (type) {

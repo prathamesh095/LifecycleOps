@@ -152,29 +152,17 @@ export function ApplicationsClient() {
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
-  // Fetch applications from API
-  const fetchApplications = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch('/api/applications');
-      if (!response.ok) throw new Error('Failed to fetch applications');
-      const data = await response.json();
-      setApplications(data);
-    } catch (error) {
-      console.error('Error fetching applications:', error);
-      toast.error('Failed to load applications. Showing local data.');
-      // Fallback to initial mock data if empty
-      if (applications.length === 0) {
-        setApplications(INITIAL_APPLICATIONS);
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, [setApplications, applications.length]);
-
+  // Initialize store with mock data if empty
   useEffect(() => {
-    fetchApplications();
-  }, []);
+    if (applications.length === 0) {
+      setApplications(INITIAL_APPLICATIONS);
+    }
+  }, [applications.length, setApplications]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, statusFilter]);
 
   // Mutation Handlers using centralized engine logic
   const handleLogActivity = useCallback((applicationId: string, type: ActivityType, notes?: string) => {
@@ -208,7 +196,6 @@ export function ApplicationsClient() {
 
   const handleDeleteApplication = useCallback((id: string) => {
     storeDeleteApplication(id);
-    toast.success('Application deleted');
   }, [storeDeleteApplication]);
 
   // Re-run engine when applications change
@@ -250,23 +237,11 @@ export function ApplicationsClient() {
   const totalPages = Math.ceil(filteredApplications.length / pageSize);
 
   const handleCreateApplication = async (data: ApplicationFormData) => {
-    const toastId = toast.loading('Creating application...');
     try {
-      const response = await fetch('/api/applications', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || result.error || 'Failed to create application');
-      }
-      
       const now = new Date().toISOString();
+      
       const newApplication: Application = {
-        id: result.id,
+        id: crypto.randomUUID(),
         ...data,
         created_at: now,
         updated_at: now,
@@ -289,7 +264,7 @@ export function ApplicationsClient() {
       
       addApplication(newApplication);
       
-      // Log creation activity locally
+      // Log creation activity
       addActivity({
         id: crypto.randomUUID(),
         application_id: newApplication.id,
@@ -300,13 +275,10 @@ export function ApplicationsClient() {
       });
 
       setIsOpen(false);
-      toast.success('Application created successfully', { id: toastId });
-      
-      // Clear draft after success
-      localStorage.removeItem('apex_app_draft');
-    } catch (error: any) {
+      toast.success('Application created');
+    } catch (error) {
       console.error('Failed to create application:', error);
-      toast.error(error.message || 'Failed to create application. Please try again.', { id: toastId });
+      toast.error('Failed to create application');
     }
   };
 
@@ -334,10 +306,7 @@ export function ApplicationsClient() {
             type="text"
             placeholder="Search applications..."
             value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="flex h-10 w-full rounded-xl border border-neutral-200 bg-white pl-10 pr-3 py-2 text-sm ring-offset-white placeholder:text-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20 focus-visible:border-neutral-900 transition-all duration-200"
           />
         </div>
@@ -345,10 +314,7 @@ export function ApplicationsClient() {
           <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
           <select
             value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => setStatusFilter(e.target.value)}
             className="flex h-10 w-full appearance-none rounded-xl border border-neutral-200 bg-white pl-10 pr-8 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20 focus-visible:border-neutral-900 transition-all duration-200"
           >
             <option value="ALL">All Status</option>

@@ -6,8 +6,6 @@ import { Application, ApplicationActivity, Notification, Contact, Reminder } fro
 import { recomputeApplicationSignals, generateId } from './engine';
 import { isPast, differenceInHours, parseISO } from 'date-fns';
 import { get, set, del } from 'idb-keyval';
-import { addToSyncQueue } from './local-cache';
-import { triggerSync } from './sync/engine';
 
 // Custom IndexedDB storage adapter
 const storage = {
@@ -28,8 +26,6 @@ interface ApplicationState {
   notifications: Notification[];
   contacts: Contact[];
   reminders: Reminder[];
-  isCloudSynced: boolean;
-  lastSyncedAt: string | null;
 
   setApplications: (apps: Application[]) => void;
   addApplication: (app: Application) => void;
@@ -57,8 +53,6 @@ interface ApplicationState {
 
   // Global Pipeline
   applyGlobalMutation: () => void;
-  setCloudSynced: (synced: boolean) => void;
-  loadFromCloud: () => Promise<void>;
 }
 
 export const useApplicationStore = create<ApplicationState>()(
@@ -69,8 +63,6 @@ export const useApplicationStore = create<ApplicationState>()(
       notifications: [],
       contacts: [],
       reminders: [],
-      isCloudSynced: false,
-      lastSyncedAt: null,
       
       setApplications: (apps) => {
         set({ applications: apps.map(app => recomputeApplicationSignals(app)) });
@@ -82,14 +74,6 @@ export const useApplicationStore = create<ApplicationState>()(
           applications: [recomputeApplicationSignals(app), ...state.applications] 
         }));
         get().applyGlobalMutation();
-
-        // Queue for sync
-        addToSyncQueue({
-          id: app.id,
-          type: 'APPLICATION',
-          action: 'CREATE',
-          timestamp: Date.now()
-        }).then(() => triggerSync());
       },
       
       updateApplication: (updatedApp) => {
@@ -99,14 +83,6 @@ export const useApplicationStore = create<ApplicationState>()(
           )
         }));
         get().applyGlobalMutation();
-
-        // Queue for sync
-        addToSyncQueue({
-          id: updatedApp.id,
-          type: 'APPLICATION',
-          action: 'UPDATE',
-          timestamp: Date.now()
-        }).then(() => triggerSync());
       },
       
       deleteApplication: (id) => {
@@ -114,14 +90,6 @@ export const useApplicationStore = create<ApplicationState>()(
           applications: state.applications.filter((app) => app.id !== id)
         }));
         get().applyGlobalMutation();
-
-        // Queue for sync
-        addToSyncQueue({
-          id,
-          type: 'APPLICATION',
-          action: 'DELETE',
-          timestamp: Date.now()
-        }).then(() => triggerSync());
       },
       
       addActivity: (activity) => {
@@ -135,14 +103,6 @@ export const useApplicationStore = create<ApplicationState>()(
           };
         });
         get().applyGlobalMutation();
-
-        // Queue for sync
-        addToSyncQueue({
-          id: activity.id,
-          type: 'ACTIVITY',
-          action: 'CREATE',
-          timestamp: Date.now()
-        }).then(() => triggerSync());
       },
       
       getActivities: (applicationId) => {
@@ -167,42 +127,18 @@ export const useApplicationStore = create<ApplicationState>()(
           contacts: [contact, ...state.contacts]
         }));
         get().applyGlobalMutation();
-
-        // Queue for sync
-        addToSyncQueue({
-          id: contact.id,
-          type: 'CONTACT',
-          action: 'CREATE',
-          timestamp: Date.now()
-        }).then(() => triggerSync());
       },
       updateContact: (updatedContact) => {
         set((state) => ({
           contacts: state.contacts.map(c => c.id === updatedContact.id ? updatedContact : c)
         }));
         get().applyGlobalMutation();
-
-        // Queue for sync
-        addToSyncQueue({
-          id: updatedContact.id,
-          type: 'CONTACT',
-          action: 'UPDATE',
-          timestamp: Date.now()
-        }).then(() => triggerSync());
       },
       deleteContact: (id) => {
         set((state) => ({
           contacts: state.contacts.filter(c => c.id !== id)
         }));
         get().applyGlobalMutation();
-
-        // Queue for sync
-        addToSyncQueue({
-          id,
-          type: 'CONTACT',
-          action: 'DELETE',
-          timestamp: Date.now()
-        }).then(() => triggerSync());
       },
 
       // Reminders
@@ -211,122 +147,20 @@ export const useApplicationStore = create<ApplicationState>()(
           reminders: [reminder, ...state.reminders]
         }));
         get().applyGlobalMutation();
-
-        // Queue for sync
-        addToSyncQueue({
-          id: reminder.id,
-          type: 'REMINDER',
-          action: 'CREATE',
-          timestamp: Date.now()
-        }).then(() => triggerSync());
       },
       updateReminder: (updatedReminder) => {
         set((state) => ({
           reminders: state.reminders.map(r => r.id === updatedReminder.id ? updatedReminder : r)
         }));
         get().applyGlobalMutation();
-
-        // Queue for sync
-        addToSyncQueue({
-          id: updatedReminder.id,
-          type: 'REMINDER',
-          action: 'UPDATE',
-          timestamp: Date.now()
-        }).then(() => triggerSync());
       },
       deleteReminder: (id) => {
         set((state) => ({
           reminders: state.reminders.filter(r => r.id !== id)
         }));
         get().applyGlobalMutation();
-
-        // Queue for sync
-        addToSyncQueue({
-          id,
-          type: 'REMINDER',
-          action: 'DELETE',
-          timestamp: Date.now()
-        }).then(() => triggerSync());
       },
 
-      setCloudSynced: (synced) => set({ isCloudSynced: synced }),
-
-      loadFromCloud: async () => {
-        try {
-          const response = await fetch('/api/bootstrap');
-
-          if (response.ok) {
-            const { applications: apps, contacts, activities, reminders, serverTime } = await response.json();
-
-            // Merge applications
-            const appsMap = new Map(get().applications.map(a => [a.id, a]));
-            apps.forEach((newApp: any) => {
-              const mappedApp = {
-                ...newApp,
-                company_name: newApp.companyName,
-                job_title: newApp.jobTitle,
-                channel_type: newApp.channelType,
-                next_follow_up_at: newApp.nextFollowUpAt,
-                interview_date: newApp.interviewDate,
-                last_activity_at: newApp.lastActivityAt,
-                is_high_priority: newApp.isHighPriority,
-                is_archived: newApp.isArchived,
-              };
-              appsMap.set(mappedApp.id, recomputeApplicationSignals(mappedApp));
-            });
-
-            // Merge contacts
-            const contactsMap = new Map(get().contacts.map(c => [c.id, c]));
-            contacts.forEach((newContact: any) => {
-              contactsMap.set(newContact.id, {
-                ...newContact,
-                linkedin_url: newContact.linkedinUrl,
-                last_contact_at: newContact.lastContactAt,
-              });
-            });
-
-            // Merge reminders
-            const remindersMap = new Map(get().reminders.map(r => [r.id, r]));
-            reminders.forEach((newReminder: any) => {
-              remindersMap.set(newReminder.id, {
-                ...newReminder,
-                due_at: newReminder.dueAt,
-              });
-            });
-
-            // Merge activities
-            const activitiesMap = { ...get().activities };
-            activities.forEach((act: any) => {
-              const mappedAct = {
-                ...act,
-                application_id: act.applicationId,
-                occurred_at: act.occurredAt,
-              };
-              if (!activitiesMap[mappedAct.application_id]) {
-                activitiesMap[mappedAct.application_id] = [];
-              }
-              const exists = activitiesMap[mappedAct.application_id].some(a => a.id === mappedAct.id);
-              if (!exists) {
-                activitiesMap[mappedAct.application_id].push(mappedAct);
-              }
-            });
-
-            set({
-              applications: Array.from(appsMap.values()),
-              contacts: Array.from(contactsMap.values()),
-              activities: activitiesMap,
-              reminders: Array.from(remindersMap.values()),
-              isCloudSynced: true,
-              lastSyncedAt: serverTime || new Date().toISOString()
-            });
-            
-            get().applyGlobalMutation();
-          }
-        } catch (error) {
-          console.error('Failed to load from cloud:', error);
-        }
-      },
-      
       // Global Pipeline
       applyGlobalMutation: () => {
         const state = get();

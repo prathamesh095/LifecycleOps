@@ -8,8 +8,6 @@ import { User, Bell, Shield, Smartphone } from 'lucide-react';
 import { motion } from 'motion/react';
 import { hoverable, pressable } from '@/lib/motion/presets';
 
-import { SyncCard } from '@/components/settings/SyncCard';
-
 export function SettingsClient() {
   return (
     <PageContainer>
@@ -19,8 +17,6 @@ export function SettingsClient() {
       />
       
       <div className="space-y-6">
-        <SyncCard />
-
         <Card>
           <CardHeader>
             <CardTitle>Profile</CardTitle>
