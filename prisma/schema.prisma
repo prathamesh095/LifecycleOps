@@ -12,19 +12,24 @@ generator client {
 }
 
 model User {
-  id        String     @id @default(cuid())
-  email     String     @unique
-  name      String?
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id             String     @id @default(cuid())
+  email          String     @unique
+  name           String?
+  passwordHash   String?    // null for OAuth users
+  sessionToken   String?    @unique // for session-based auth
+  tokenExpiresAt DateTime?  // session expiration
+  isActive       Boolean    @default(true)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
   // Relations
-  applications Application[]
-  activities   Activity[]
-  contacts     Contact[]
-  reminders    Reminder[]
+  applications   Application[]
+  activities     Activity[]
+  contacts       Contact[]
+  reminders      Reminder[]
 
   @@index([email])
+  @@index([sessionToken])
 }
 
 model Application {
@@ -48,6 +53,8 @@ model Application {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+  @@index([userId, status, createdAt])
+  @@index([userId, appliedDate])
 }
 
 model Activity {
@@ -71,6 +78,7 @@ model Activity {
   @@index([applicationId])
   @@index([date])
   @@index([createdAt])
+  @@index([userId, applicationId, createdAt])
 }
 
 model Contact {
@@ -94,6 +102,7 @@ model Contact {
   @@index([userId])
   @@index([applicationId])
   @@index([email])
+  @@index([userId, applicationId])
 }
 
 model Reminder {
@@ -117,4 +126,5 @@ model Reminder {
   @@index([applicationId])
   @@index([dueDate])
   @@index([completed])
+  @@index([userId, dueDate, completed])
 }

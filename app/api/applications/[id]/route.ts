@@ -2,6 +2,10 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { updateApplicationValidator } from "@/lib/validators";
 import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth/middleware";
+import { rateLimitMiddleware } from "@/lib/middleware/rate-limit";
+import { csrfMiddleware } from "@/lib/middleware/csrf";
+import { getSecurityHeaders } from "@/lib/middleware/security-headers";
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -10,22 +14,34 @@ interface Params {
 // GET /api/applications/[id]
 export async function GET(req: NextRequest, { params }: Params) {
   try {
-    const userId = req.headers.get("x-user-id");
-    if (!userId) {
+    // Authenticate user
+    const user = await requireAuth(req);
+    if (!user) {
       return NextResponse.json(
-        { error: "User ID is required" },
+        { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
+    // Rate limit
+    const rateLimitError = await rateLimitMiddleware(req, user.id, "api");
+    if (rateLimitError) return rateLimitError;
+
     const { id } = await params;
 
+    // Fetch with eager loading to prevent N+1 queries
     const application = await prisma.application.findUnique({
       where: { id },
       include: {
-        activities: true,
+        activities: {
+          orderBy: { createdAt: "desc" },
+          take: 20, // Limit to prevent huge responses
+        },
         contacts: true,
-        reminders: true,
+        reminders: {
+          where: { completed: false },
+          orderBy: { dueDate: "asc" },
+        },
       },
     });
 
@@ -36,16 +52,23 @@ export async function GET(req: NextRequest, { params }: Params) {
       );
     }
 
-    if (application.userId !== userId) {
+    // Verify user owns this application
+    if (application.userId !== user.id) {
       return NextResponse.json(
-        { error: "Unauthorized" },
+        { error: "Forbidden" },
         { status: 403 }
       );
     }
 
-    return NextResponse.json(application);
+    const response = NextResponse.json(application);
+    Object.entries(getSecurityHeaders()).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+    response.headers.set("Cache-Control", "private, max-age=60");
+
+    return response;
   } catch (error) {
-    console.error("[v0] Error fetching application:", error);
+    console.error("[Auth] Error fetching application:", error);
     return NextResponse.json(
       { error: "Failed to fetch application" },
       { status: 500 }
@@ -56,13 +79,22 @@ export async function GET(req: NextRequest, { params }: Params) {
 // PATCH /api/applications/[id]
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
-    const userId = req.headers.get("x-user-id");
-    if (!userId) {
+    // Authenticate user
+    const user = await requireAuth(req);
+    if (!user) {
       return NextResponse.json(
-        { error: "User ID is required" },
+        { error: "Unauthorized" },
         { status: 401 }
       );
     }
+
+    // Rate limit
+    const rateLimitError = await rateLimitMiddleware(req, user.id, "api");
+    if (rateLimitError) return rateLimitError;
+
+    // CSRF protection
+    const csrfError = await csrfMiddleware(req);
+    if (csrfError) return csrfError;
 
     const { id } = await params;
     const body = await req.json();
@@ -76,6 +108,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       return NextResponse.json(
         { error: "Application not found" },
         { status: 404 }
+      );
+    }
+
+    // Verify user owns this application
+    if (existing.userId !== user.id) {
+      return NextResponse.json(
+        { error: "Forbidden" },
+        { status: 403 }
       );
     }
 
