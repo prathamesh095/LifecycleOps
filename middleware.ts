@@ -2,9 +2,9 @@
  * Next.js middleware for global security and performance enhancements
  * Runs on every request at the edge
  * 
- * NOTE: This middleware cannot use Prisma or other database libraries
- * because Next.js edge runtime doesn't support them. Session validation
- * is handled server-side in API routes and layout.tsx
+ * IMPORTANT: This file cannot import anything that depends on Prisma or database libraries
+ * because middleware runs in the edge runtime which doesn't support these libraries.
+ * Keep all imports and code here completely edge-safe.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
