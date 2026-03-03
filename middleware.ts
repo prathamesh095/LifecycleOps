@@ -38,13 +38,22 @@ export async function middleware(request: NextRequest) {
   const sessionToken = request.cookies.get('session')?.value;
   const pathname = request.nextUrl.pathname;
 
+  // Public routes that don't require authentication
+  const publicRoutes = ['/', '/login', '/api/auth/register', '/api/auth/login'];
+  const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/api/auth/');
+
   // Protected routes that require authentication
-  const protectedRoutes = ['/dashboard', '/applications', '/activities', '/contacts', '/reminders'];
+  const protectedRoutes = ['/dashboard', '/applications', '/activities', '/contacts', '/reminders', '/settings', '/analytics', '/help'];
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
 
-  // Simple token presence check (full validation happens server-side in API routes)
+  // Redirect unauthenticated users from protected routes to login
   if (isProtectedRoute && !sessionToken) {
     return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  // Redirect authenticated users from login back to dashboard
+  if (pathname === '/login' && sessionToken) {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
   return response;
